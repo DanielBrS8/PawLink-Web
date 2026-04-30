@@ -40,6 +40,8 @@ export default function TabLayout() {
         tabBarStyle: styles.tabBar,
         tabBarLabelStyle: styles.label,
       }}>
+      <Tabs.Screen name="index" options={{ href: null }} />
+      <Tabs.Screen name="two" options={{ href: null }} />
       <Tabs.Screen
         name="centros"
         options={{ title: 'Centros', tabBarIcon: CentrosIcon }}
