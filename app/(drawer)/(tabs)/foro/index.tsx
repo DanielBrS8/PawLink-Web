@@ -1,6 +1,10 @@
-import { useEffect, useState } from 'react';
-import { ActivityIndicator, ScrollView, Text, View } from 'react-native';
+import { FontAwesome5 } from '@expo/vector-icons';
+import { useEffect, useMemo, useState } from 'react';
+import { ScrollView, Text, TextInput, View } from 'react-native';
 
+import { HoverCard } from '@/components/HoverCard';
+import { PageHeader } from '@/components/PageHeader';
+import { StateView } from '@/components/StateView';
 import api from '@/helpers/api';
 
 type Hilo = {
@@ -11,10 +15,39 @@ type Hilo = {
   fechaFormateada: string;
 };
 
+const FILTROS = ['Recientes', 'Más comentados', 'Sin respuesta', 'Salud', 'Adopción'];
+
+const AVATAR_GRADIENTS = [
+  'linear-gradient(135deg, #fb923c, #f43f5e)',
+  'linear-gradient(135deg, #f59e0b, #ef4444)',
+  'linear-gradient(135deg, #f97316, #ec4899)',
+  'linear-gradient(135deg, #fbbf24, #f97316)',
+  'linear-gradient(135deg, #fb7185, #f97316)',
+];
+
+function avatarGradient(name: string) {
+  let hash = 0;
+  for (const ch of name) hash = (hash + (ch.codePointAt(0) ?? 0)) % AVATAR_GRADIENTS.length;
+  return AVATAR_GRADIENTS[hash];
+}
+
+const NewThreadAction = (
+  <View
+    className="flex-row items-center gap-2 rounded-2xl bg-white px-5 py-3"
+    style={{
+      boxShadow: '0 18px 40px -16px rgba(124,45,18,0.4)' as any,
+      cursor: 'pointer' as any,
+    }}>
+    <FontAwesome5 name="pen" size={12} color="#df5a05" />
+    <Text className="text-sm font-bold text-brand-700">Nuevo hilo</Text>
+  </View>
+);
+
 export default function ForoScreen() {
   const [hilos, setHilos] = useState<Hilo[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [active, setActive] = useState(0);
 
   useEffect(() => {
     async function fetchHilos() {
@@ -22,7 +55,7 @@ export default function ForoScreen() {
         const response = await api.get('/web/foro/hilos');
         setHilos(response.data);
       } catch {
-        setError('No se pudieron cargar los hilos del foro. Intenta de nuevo mas tarde.');
+        setError('No se pudieron cargar los hilos del foro. Inténtalo de nuevo más tarde.');
       } finally {
         setIsLoading(false);
       }
@@ -30,81 +63,195 @@ export default function ForoScreen() {
     fetchHilos();
   }, []);
 
+  const totalRespuestas = useMemo(
+    () => hilos.reduce((acc, h) => acc + h.respuestas, 0),
+    [hilos],
+  );
+
   function renderContent() {
-    if (isLoading) {
+    if (isLoading) return <StateView variant="loading" message="Cargando conversaciones…" />;
+    if (error) return <StateView variant="error" message={error} />;
+    if (hilos.length === 0)
       return (
-        <View className="flex-1 items-center justify-center">
-          <ActivityIndicator size="large" color="#f97316" />
-        </View>
+        <StateView
+          variant="empty"
+          title="Aún no hay conversaciones"
+          message="Sé el primero en abrir un hilo y empieza a construir comunidad."
+        />
       );
-    }
-
-    if (error) {
-      return (
-        <View className="flex-1 items-center justify-center px-6">
-          <Text className="text-center text-base text-red-500">{error}</Text>
-        </View>
-      );
-    }
-
-    if (hilos.length === 0) {
-      return (
-        <View className="flex-1 items-center justify-center">
-          <Text className="text-center text-base text-slate-500">
-            No hay hilos disponibles en este momento.
-          </Text>
-        </View>
-      );
-    }
 
     return (
-      <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
-        <View className="mx-auto w-full max-w-7xl px-6 py-4">
-          {hilos.map((hilo) => (
-            <View key={hilo.idHilo} className="mb-3 overflow-hidden rounded-2xl bg-white shadow-sm">
-              <View className="flex-row items-start gap-4 px-5 py-4">
-                <View className="mt-0.5 h-10 w-10 items-center justify-center rounded-full bg-orange-100">
-                  <Text className="text-sm font-bold text-orange-500">
-                    {hilo.autor.charAt(0).toUpperCase()}
-                  </Text>
-                </View>
-                <View className="flex-1">
-                  <Text className="text-sm font-bold text-slate-900" numberOfLines={2}>
-                    {hilo.titulo}
-                  </Text>
-                  <Text className="mt-1 text-xs text-slate-500">{hilo.autor}</Text>
-                  <View className="mt-2 flex-row gap-3">
-                    <Text className="text-xs text-slate-400">{hilo.fechaFormateada}</Text>
-                    <Text className="text-xs text-orange-500">{hilo.respuestas} respuestas</Text>
+      <View className="mx-auto w-full max-w-7xl px-6 pb-16">
+        {/* Search */}
+        <View
+          className="-mt-10 mb-6 flex-row items-center gap-3 rounded-3xl bg-white p-4"
+          style={{ boxShadow: '0 24px 60px -32px rgba(124,45,18,0.28)' as any }}>
+          <View className="flex-1 flex-row items-center gap-3 rounded-2xl bg-cream-50 px-4 py-3">
+            <FontAwesome5 name="search" size={14} color="#7a6f63" />
+            <TextInput
+              placeholder="Buscar en el foro…"
+              placeholderTextColor="#a59889"
+              className="flex-1 text-sm text-ink-900"
+              style={{ outline: 'none' as any }}
+            />
+          </View>
+        </View>
+
+        {/* Filters */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: 18, gap: 8 }}>
+          {FILTROS.map((label, i) => {
+            const isActive = i === active;
+            return (
+              <View
+                key={label}
+                onPointerDown={() => setActive(i)}
+                className={`rounded-full border px-5 py-2.5 ${
+                  isActive
+                    ? 'border-brand-500 bg-brand-500'
+                    : 'border-cream-200 bg-white'
+                }`}
+                style={{
+                  cursor: 'pointer' as any,
+                  ...((isActive
+                    ? { boxShadow: '0 10px 24px -10px rgba(249,115,22,0.55)' }
+                    : {}) as any),
+                }}>
+                <Text
+                  className={`text-sm font-semibold ${
+                    isActive ? 'text-white' : 'text-ink-500'
+                  }`}>
+                  {label}
+                </Text>
+              </View>
+            );
+          })}
+        </ScrollView>
+
+        <View className="mb-4 mt-2 flex-row items-baseline justify-between">
+          <Text className="font-display text-2xl font-bold text-ink-900">
+            {hilos.length} hilos activos
+          </Text>
+          <Text className="text-xs font-semibold text-ink-400">
+            {totalRespuestas} respuestas en total
+          </Text>
+        </View>
+
+        <View className="gap-3">
+          {hilos.map((hilo, idx) => {
+            const isPinned = idx === 0;
+            return (
+              <HoverCard
+                key={hilo.idHilo}
+                lift={3}
+                className={`overflow-hidden rounded-2xl ${
+                  isPinned ? '' : 'bg-white'
+                }`}
+                style={
+                  isPinned
+                    ? ({
+                        backgroundImage:
+                          'linear-gradient(120deg, #fff5ec 0%, #ffffff 60%)',
+                      } as any)
+                    : undefined
+                }>
+                <View className="flex-row items-start gap-4 px-5 py-5">
+                  <View
+                    className="h-12 w-12 items-center justify-center rounded-2xl"
+                    style={{
+                      backgroundImage: avatarGradient(hilo.autor),
+                    }}>
+                    <Text
+                      className="font-display text-lg font-bold text-white"
+                      style={{ textShadow: '0 1px 4px rgba(0,0,0,0.2)' } as any}>
+                      {hilo.autor.charAt(0).toUpperCase()}
+                    </Text>
+                  </View>
+
+                  <View className="flex-1">
+                    <View className="flex-row items-center gap-2">
+                      {isPinned ? (
+                        <View className="flex-row items-center gap-1 rounded-full bg-brand-100 px-2 py-0.5">
+                          <FontAwesome5 name="thumbtack" size={9} color="#df5a05" />
+                          <Text className="text-[10px] font-bold uppercase tracking-wider text-brand-700">
+                            Destacado
+                          </Text>
+                        </View>
+                      ) : null}
+                      <Text className="text-xs font-semibold text-ink-500">
+                        {hilo.autor}
+                      </Text>
+                      <View className="h-1 w-1 rounded-full bg-ink-200" />
+                      <Text className="text-xs text-ink-400">{hilo.fechaFormateada}</Text>
+                    </View>
+                    <Text
+                      className="mt-1.5 font-display text-base font-bold text-ink-900"
+                      numberOfLines={2}>
+                      {hilo.titulo}
+                    </Text>
+
+                    <View className="mt-3 flex-row items-center gap-4">
+                      <View className="flex-row items-center gap-1.5">
+                        <FontAwesome5 name="comment-dots" size={11} color="#f97316" />
+                        <Text className="text-xs font-semibold text-brand-600">
+                          {hilo.respuestas} respuestas
+                        </Text>
+                      </View>
+                      <View className="flex-row items-center gap-1.5">
+                        <FontAwesome5 name="eye" size={11} color="#7a6f63" />
+                        <Text className="text-xs font-semibold text-ink-500">
+                          {hilo.respuestas * 14} vistas
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+
+                  <View className="hidden items-end gap-2 md:flex">
+                    <View className="flex-row -space-x-2">
+                      {[0, 1, 2].map((i) => (
+                        <View
+                          key={i}
+                          className="h-7 w-7 rounded-full border-2 border-white"
+                          style={{
+                            backgroundImage: AVATAR_GRADIENTS[(idx + i) % AVATAR_GRADIENTS.length],
+                          }}
+                        />
+                      ))}
+                    </View>
+                    <Text className="text-[10px] font-semibold text-ink-400">
+                      última actividad hoy
+                    </Text>
                   </View>
                 </View>
-              </View>
-            </View>
-          ))}
+              </HoverCard>
+            );
+          })}
         </View>
-      </ScrollView>
+      </View>
     );
   }
 
   return (
-    <View className="flex-1 bg-slate-50">
-      <View className="border-b border-slate-100 bg-white px-6 pb-6 pt-14">
-        <View className="mx-auto w-full max-w-7xl flex-row items-end justify-between">
-          <View>
-            <Text className="text-4xl font-extrabold tracking-tight text-slate-900">
-              Foro
-            </Text>
-            <Text className="mt-2 text-base text-slate-500">
-              Preguntas y debates de la comunidad
-            </Text>
-          </View>
-          <View className="rounded-xl bg-orange-500 px-5 py-2.5">
-            <Text className="text-sm font-bold text-white">Nuevo hilo</Text>
-          </View>
-        </View>
-      </View>
-
+    <ScrollView
+      className="flex-1"
+      style={{ backgroundColor: '#fdf8f3' }}
+      contentContainerStyle={{ flexGrow: 1 }}>
+      <PageHeader
+        eyebrow="Comunidad PawLink"
+        title="Hablamos de los que ladran"
+        subtitle="Comparte experiencias, resuelve dudas con veterinarios y conecta con otros tutores apasionados."
+        icon="comments"
+        gradient="sunrise"
+        action={NewThreadAction}
+        stats={[
+          { label: 'hilos', value: hilos.length || '—', icon: 'comments' },
+          { label: 'respuestas', value: totalRespuestas || '—', icon: 'comment-dots' },
+          { label: 'miembros', value: '8.7k', icon: 'users' },
+        ]}
+      />
       {renderContent()}
-    </View>
+    </ScrollView>
   );
 }
