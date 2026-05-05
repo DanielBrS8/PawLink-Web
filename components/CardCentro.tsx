@@ -1,5 +1,5 @@
 import { FontAwesome5 } from '@expo/vector-icons';
-import { Image, Text, View } from 'react-native';
+import { Image, Pressable, Text, View } from 'react-native';
 
 import { HoverCard } from './HoverCard';
 
@@ -11,7 +11,12 @@ export interface Centro {
   foto_url: string | null;
 }
 
-export function CardCentro({ centro }: Readonly<{ centro: Centro }>) {
+type Props = Readonly<{
+  centro: Centro;
+  onLeaveReview?: (centro: Centro) => void;
+}>;
+
+export function CardCentro({ centro, onLeaveReview }: Props) {
   return (
     <HoverCard className="overflow-hidden rounded-3xl bg-white">
       <View className="relative">
@@ -31,7 +36,6 @@ export function CardCentro({ centro }: Readonly<{ centro: Centro }>) {
           </View>
         )}
 
-        {/* Image overlay gradient */}
         <View
           pointerEvents="none"
           className="absolute inset-x-0 bottom-0 h-24"
@@ -41,8 +45,8 @@ export function CardCentro({ centro }: Readonly<{ centro: Centro }>) {
           }}
         />
 
-        {/* Especialidad chip on image */}
-        <View className="absolute left-4 top-4 flex-row items-center gap-1.5 rounded-full bg-white/95 px-3 py-1.5"
+        <View
+          className="absolute left-4 top-4 flex-row items-center gap-1.5 rounded-full bg-white/95 px-3 py-1.5"
           style={{ backdropFilter: 'blur(8px)' as any }}>
           <FontAwesome5 name="stethoscope" size={10} color="#f97316" />
           <Text className="text-xs font-bold text-brand-700">
@@ -50,8 +54,8 @@ export function CardCentro({ centro }: Readonly<{ centro: Centro }>) {
           </Text>
         </View>
 
-        {/* Heart fav button */}
-        <View className="absolute right-4 top-4 h-9 w-9 items-center justify-center rounded-full bg-white/95"
+        <View
+          className="absolute right-4 top-4 h-9 w-9 items-center justify-center rounded-full bg-white/95"
           style={{ backdropFilter: 'blur(8px)' as any }}>
           <FontAwesome5 name="heart" size={14} color="#f97316" />
         </View>
@@ -85,6 +89,20 @@ export function CardCentro({ centro }: Readonly<{ centro: Centro }>) {
             <FontAwesome5 name="arrow-right" size={10} color="#df5a05" />
           </View>
         </View>
+
+        {onLeaveReview ? (
+          <Pressable
+            onPress={() => onLeaveReview(centro)}
+            className="mt-3 flex-row items-center justify-center gap-2 rounded-2xl py-2.5"
+            style={{
+              backgroundImage: 'linear-gradient(120deg, #fb923c, #f97316)',
+              boxShadow: '0 12px 28px -14px rgba(249,115,22,0.55)' as any,
+              cursor: 'pointer' as any,
+            }}>
+            <FontAwesome5 name="pen" size={11} color="#fff" />
+            <Text className="text-xs font-bold text-white">Dejar Reseña</Text>
+          </Pressable>
+        ) : null}
       </View>
     </HoverCard>
   );

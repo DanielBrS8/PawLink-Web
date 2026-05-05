@@ -1,8 +1,10 @@
 import { FontAwesome5 } from '@expo/vector-icons';
-import { useEffect, useMemo, useState } from 'react';
-import { ScrollView, Text, TextInput, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 
 import { HoverCard } from '@/components/HoverCard';
+import { InputWeb, SubmitButton } from '@/components/InputWeb';
+import { ModalForm } from '@/components/ModalForm';
 import { PageHeader } from '@/components/PageHeader';
 import { StateView } from '@/components/StateView';
 import api from '@/helpers/api';
@@ -31,41 +33,84 @@ function avatarGradient(name: string) {
   return AVATAR_GRADIENTS[hash];
 }
 
-const NewThreadAction = (
-  <View
-    className="flex-row items-center gap-2 rounded-2xl bg-white px-5 py-3"
-    style={{
-      boxShadow: '0 18px 40px -16px rgba(124,45,18,0.4)' as any,
-      cursor: 'pointer' as any,
-    }}>
-    <FontAwesome5 name="pen" size={12} color="#df5a05" />
-    <Text className="text-sm font-bold text-brand-700">Nuevo hilo</Text>
-  </View>
-);
-
 export default function ForoScreen() {
   const [hilos, setHilos] = useState<Hilo[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [active, setActive] = useState(0);
 
-  useEffect(() => {
-    async function fetchHilos() {
-      try {
-        const response = await api.get('/web/foro/hilos');
-        setHilos(response.data);
-      } catch {
-        setError('No se pudieron cargar los hilos del foro. Inténtalo de nuevo más tarde.');
-      } finally {
-        setIsLoading(false);
-      }
+  const [modalOpen, setModalOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [titulo, setTitulo] = useState('');
+  const [contenido, setContenido] = useState('');
+
+  const fetchHilos = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      const response = await api.get('/web/foro/hilos');
+      setHilos(response.data);
+      setError(null);
+    } catch {
+      setError('No se pudieron cargar los hilos del foro. Inténtalo de nuevo más tarde.');
+    } finally {
+      setIsLoading(false);
     }
-    fetchHilos();
   }, []);
+
+  useEffect(() => {
+    fetchHilos();
+  }, [fetchHilos]);
 
   const totalRespuestas = useMemo(
     () => hilos.reduce((acc, h) => acc + h.respuestas, 0),
     [hilos],
+  );
+
+  function openModal() {
+    setSubmitError(null);
+    setTitulo('');
+    setContenido('');
+    setModalOpen(true);
+  }
+
+  function closeModal() {
+    if (submitting) return;
+    setModalOpen(false);
+  }
+
+  async function handleSubmit() {
+    if (!titulo.trim() || !contenido.trim()) {
+      setSubmitError('El título y el contenido son obligatorios.');
+      return;
+    }
+    try {
+      setSubmitting(true);
+      setSubmitError(null);
+      await api.post('/web/foro/hilos', {
+        titulo: titulo.trim(),
+        contenido: contenido.trim(),
+      });
+      setModalOpen(false);
+      await fetchHilos();
+    } catch {
+      setSubmitError('No se pudo crear el hilo. Inténtalo de nuevo en un momento.');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  const newThreadAction = (
+    <Pressable
+      onPress={openModal}
+      className="flex-row items-center gap-2 rounded-2xl bg-white px-5 py-3"
+      style={{
+        boxShadow: '0 18px 40px -16px rgba(124,45,18,0.4)' as any,
+        cursor: 'pointer' as any,
+      }}>
+      <FontAwesome5 name="pen" size={12} color="#df5a05" />
+      <Text className="text-sm font-bold text-brand-700">Nuevo hilo</Text>
+    </Pressable>
   );
 
   function renderContent() {
@@ -95,6 +140,16 @@ export default function ForoScreen() {
               style={{ outline: 'none' as any }}
             />
           </View>
+          <Pressable
+            onPress={openModal}
+            className="hidden flex-row items-center gap-2 rounded-2xl bg-brand-500 px-5 py-3 md:flex"
+            style={{
+              boxShadow: '0 18px 40px -16px rgba(249,115,22,0.55)' as any,
+              cursor: 'pointer' as any,
+            }}>
+            <FontAwesome5 name="pen" size={12} color="#fff" />
+            <Text className="text-sm font-bold text-white">Nuevo hilo</Text>
+          </Pressable>
         </View>
 
         {/* Filters */}
@@ -105,9 +160,9 @@ export default function ForoScreen() {
           {FILTROS.map((label, i) => {
             const isActive = i === active;
             return (
-              <View
+              <Pressable
                 key={label}
-                onPointerDown={() => setActive(i)}
+                onPress={() => setActive(i)}
                 className={`rounded-full border px-5 py-2.5 ${
                   isActive
                     ? 'border-brand-500 bg-brand-500'
@@ -125,7 +180,7 @@ export default function ForoScreen() {
                   }`}>
                   {label}
                 </Text>
-              </View>
+              </Pressable>
             );
           })}
         </ScrollView>
@@ -146,9 +201,7 @@ export default function ForoScreen() {
               <HoverCard
                 key={hilo.idHilo}
                 lift={3}
-                className={`overflow-hidden rounded-2xl ${
-                  isPinned ? '' : 'bg-white'
-                }`}
+                className={`overflow-hidden rounded-2xl ${isPinned ? '' : 'bg-white'}`}
                 style={
                   isPinned
                     ? ({
@@ -160,9 +213,7 @@ export default function ForoScreen() {
                 <View className="flex-row items-start gap-4 px-5 py-5">
                   <View
                     className="h-12 w-12 items-center justify-center rounded-2xl"
-                    style={{
-                      backgroundImage: avatarGradient(hilo.autor),
-                    }}>
+                    style={{ backgroundImage: avatarGradient(hilo.autor) }}>
                     <Text
                       className="font-display text-lg font-bold text-white"
                       style={{ textShadow: '0 1px 4px rgba(0,0,0,0.2)' } as any}>
@@ -180,9 +231,7 @@ export default function ForoScreen() {
                           </Text>
                         </View>
                       ) : null}
-                      <Text className="text-xs font-semibold text-ink-500">
-                        {hilo.autor}
-                      </Text>
+                      <Text className="text-xs font-semibold text-ink-500">{hilo.autor}</Text>
                       <View className="h-1 w-1 rounded-full bg-ink-200" />
                       <Text className="text-xs text-ink-400">{hilo.fechaFormateada}</Text>
                     </View>
@@ -234,24 +283,65 @@ export default function ForoScreen() {
   }
 
   return (
-    <ScrollView
-      className="flex-1"
-      style={{ backgroundColor: '#fdf8f3' }}
-      contentContainerStyle={{ flexGrow: 1 }}>
-      <PageHeader
-        eyebrow="Comunidad PawLink"
-        title="Hablamos de los que ladran"
-        subtitle="Comparte experiencias, resuelve dudas con veterinarios y conecta con otros tutores apasionados."
-        icon="comments"
-        gradient="sunrise"
-        action={NewThreadAction}
-        stats={[
-          { label: 'hilos', value: hilos.length || '—', icon: 'comments' },
-          { label: 'respuestas', value: totalRespuestas || '—', icon: 'comment-dots' },
-          { label: 'miembros', value: '8.7k', icon: 'users' },
-        ]}
-      />
-      {renderContent()}
-    </ScrollView>
+    <>
+      <ScrollView
+        className="flex-1"
+        style={{ backgroundColor: '#fdf8f3' }}
+        contentContainerStyle={{ flexGrow: 1 }}>
+        <PageHeader
+          eyebrow="Comunidad PawLink"
+          title="Hablamos de los que ladran"
+          subtitle="Comparte experiencias, resuelve dudas con veterinarios y conecta con otros tutores apasionados."
+          icon="comments"
+          gradient="sunrise"
+          action={newThreadAction}
+          stats={[
+            { label: 'hilos', value: hilos.length || '—', icon: 'comments' },
+            { label: 'respuestas', value: totalRespuestas || '—', icon: 'comment-dots' },
+            { label: 'miembros', value: '8.7k', icon: 'users' },
+          ]}
+        />
+        {renderContent()}
+      </ScrollView>
+
+      <ModalForm
+        open={modalOpen}
+        onClose={closeModal}
+        title="Abrir un nuevo hilo"
+        subtitle="Comparte una pregunta o experiencia con la comunidad."
+        icon="pen">
+        <InputWeb
+          label="Título"
+          value={titulo}
+          onChangeText={setTitulo}
+          placeholder="Resume tu hilo en una frase clara"
+          maxLength={120}
+          required
+          icon="heading"
+        />
+        <InputWeb
+          label="Contenido"
+          value={contenido}
+          onChangeText={setContenido}
+          placeholder="Cuéntanos los detalles, lo que has probado o tu pregunta concreta…"
+          multiline
+          required
+          icon="align-left"
+        />
+        {submitError ? (
+          <View className="mb-3 flex-row items-center gap-2 rounded-2xl bg-rose-50 px-4 py-3">
+            <FontAwesome5 name="exclamation-circle" size={12} color="#e11d48" />
+            <Text className="flex-1 text-xs font-semibold text-rose-700">{submitError}</Text>
+          </View>
+        ) : null}
+        <SubmitButton
+          onPress={handleSubmit}
+          loading={submitting}
+          loadingText="Publicando..."
+          icon="paper-plane">
+          Publicar hilo
+        </SubmitButton>
+      </ModalForm>
+    </>
   );
 }

@@ -1,8 +1,10 @@
 import { FontAwesome5 } from '@expo/vector-icons';
 import { useEffect, useState } from 'react';
-import { Image, ScrollView, Text, View } from 'react-native';
+import { Image, Pressable, ScrollView, Text, View } from 'react-native';
 
 import { HoverCard } from '@/components/HoverCard';
+import { InputWeb, SubmitButton } from '@/components/InputWeb';
+import { ModalForm } from '@/components/ModalForm';
 import { PageHeader } from '@/components/PageHeader';
 import { StateView } from '@/components/StateView';
 import api from '@/helpers/api';
@@ -47,10 +49,17 @@ function ProgressBar({
   );
 }
 
+const SUGGESTED_AMOUNTS = [5, 10, 25, 50];
+
 export default function CampanasScreen() {
   const [campanas, setCampanas] = useState<Campana[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const [activeCampana, setActiveCampana] = useState<Campana | null>(null);
+  const [cantidad, setCantidad] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetchCampanas() {
@@ -66,8 +75,48 @@ export default function CampanasScreen() {
     fetchCampanas();
   }, []);
 
+  function openDonate(campana: Campana) {
+    setActiveCampana(campana);
+    setCantidad('');
+    setSubmitError(null);
+  }
+
+  function closeDonate() {
+    if (submitting) return;
+    setActiveCampana(null);
+  }
+
+  async function handleDonate() {
+    if (!activeCampana) return;
+    const amount = Number(cantidad.replace(',', '.'));
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setSubmitError('Introduce una cantidad válida mayor que cero.');
+      return;
+    }
+    try {
+      setSubmitting(true);
+      setSubmitError(null);
+      await api.post(`/web/campanas/${activeCampana.idCampana}/donar`, {
+        cantidad: amount,
+      });
+      setCampanas((prev) =>
+        prev.map((c) =>
+          c.idCampana === activeCampana.idCampana
+            ? { ...c, recaudado: c.recaudado + amount }
+            : c,
+        ),
+      );
+      setActiveCampana(null);
+    } catch {
+      setSubmitError('No se pudo procesar la donación. Inténtalo de nuevo.');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   function renderContent() {
-    if (isLoading) return <StateView variant="loading" message="Cargando causas que necesitan tu ayuda…" />;
+    if (isLoading)
+      return <StateView variant="loading" message="Cargando causas que necesitan tu ayuda…" />;
     if (error) return <StateView variant="error" message={error} />;
     if (campanas.length === 0)
       return (
@@ -87,9 +136,7 @@ export default function CampanasScreen() {
     return (
       <View className="mx-auto w-full max-w-7xl px-6 pb-16">
         {/* Featured */}
-        <HoverCard
-          className="-mt-14 mb-10 overflow-hidden rounded-3xl"
-          lift={4}>
+        <HoverCard className="-mt-14 mb-10 overflow-hidden rounded-3xl" lift={4}>
           <View className="md:flex-row">
             <View className="relative h-64 md:h-auto md:w-1/2">
               {destacada.fotoUrl ? (
@@ -115,7 +162,8 @@ export default function CampanasScreen() {
                     'linear-gradient(135deg, rgba(249,115,22,0.35), rgba(244,63,94,0.2))',
                 }}
               />
-              <View className="absolute left-5 top-5 flex-row items-center gap-2 rounded-full bg-white/95 px-3 py-1.5"
+              <View
+                className="absolute left-5 top-5 flex-row items-center gap-2 rounded-full bg-white/95 px-3 py-1.5"
                 style={{ backdropFilter: 'blur(8px)' as any }}>
                 <View className="h-2 w-2 rounded-full bg-brand-500" />
                 <Text className="text-[11px] font-bold uppercase tracking-widest text-brand-700">
@@ -126,9 +174,7 @@ export default function CampanasScreen() {
 
             <View
               className="flex-1 p-7 md:p-10"
-              style={{
-                backgroundImage: 'linear-gradient(135deg, #fff5ec, #ffe6d0)',
-              }}>
+              style={{ backgroundImage: 'linear-gradient(135deg, #fff5ec, #ffe6d0)' }}>
               <Text
                 className="font-display text-3xl font-bold text-ink-900 md:text-4xl"
                 numberOfLines={3}>
@@ -153,15 +199,14 @@ export default function CampanasScreen() {
                   </Text>
                   <View className="flex-row items-center gap-1.5">
                     <FontAwesome5 name="users" size={11} color="#7a6f63" />
-                    <Text className="text-xs font-semibold text-ink-500">
-                      284 donantes
-                    </Text>
+                    <Text className="text-xs font-semibold text-ink-500">284 donantes</Text>
                   </View>
                 </View>
               </View>
 
               <View className="mt-7 flex-row gap-3">
-                <View
+                <Pressable
+                  onPress={() => openDonate(destacada)}
                   className="flex-1 flex-row items-center justify-center gap-2 rounded-2xl py-3"
                   style={{
                     backgroundImage: 'linear-gradient(120deg, #fb923c, #f97316)',
@@ -170,13 +215,13 @@ export default function CampanasScreen() {
                   }}>
                   <FontAwesome5 name="heart" size={13} color="#fff" solid />
                   <Text className="text-sm font-bold text-white">Donar ahora</Text>
-                </View>
-                <View
+                </Pressable>
+                <Pressable
                   className="flex-row items-center justify-center gap-2 rounded-2xl border border-cream-200 bg-white px-5 py-3"
                   style={{ cursor: 'pointer' as any }}>
                   <FontAwesome5 name="share-alt" size={12} color="#df5a05" />
                   <Text className="text-sm font-bold text-brand-600">Compartir</Text>
-                </View>
+                </Pressable>
               </View>
             </View>
           </View>
@@ -211,7 +256,7 @@ export default function CampanasScreen() {
                           {campana.fotoUrl ? (
                             <Image
                               source={{ uri: campana.fotoUrl }}
-                              style={{ width: 140, height: '100%' as any, minHeight: 160 }}
+                              style={{ width: 140, height: '100%' as any, minHeight: 180 }}
                               resizeMode="cover"
                             />
                           ) : (
@@ -219,7 +264,7 @@ export default function CampanasScreen() {
                               className="items-center justify-center"
                               style={{
                                 width: 140,
-                                minHeight: 160,
+                                minHeight: 180,
                                 backgroundImage:
                                   'linear-gradient(135deg, #ffedd5, #fed7aa)',
                               }}>
@@ -254,21 +299,28 @@ export default function CampanasScreen() {
 
                           <View className="mt-3">
                             <ProgressBar percent={porcentaje} height={6} />
-                            <View className="mt-3 flex-row items-center justify-between">
+                            <View className="mt-3 flex-row items-center justify-between gap-2">
                               <View className="flex-row items-center gap-1.5">
                                 <FontAwesome5 name="users" size={10} color="#7a6f63" />
                                 <Text className="text-[11px] font-semibold text-ink-500">
-                                  {Math.floor(50 + Math.random() * 200)} donantes
+                                  {Math.floor(50 + (campana.idCampana % 7) * 27)} donantes
                                 </Text>
                               </View>
-                              <View className="flex-row items-center gap-1">
-                                <Text className="text-xs font-bold text-brand-600">Apoyar</Text>
-                                <FontAwesome5
-                                  name="arrow-right"
-                                  size={9}
-                                  color="#df5a05"
-                                />
-                              </View>
+                              <Pressable
+                                onPress={() => openDonate(campana)}
+                                className="flex-row items-center gap-1.5 rounded-full px-3 py-1.5"
+                                style={{
+                                  backgroundImage:
+                                    'linear-gradient(120deg, #fb923c, #f97316)',
+                                  boxShadow:
+                                    '0 10px 22px -12px rgba(249,115,22,0.55)' as any,
+                                  cursor: 'pointer' as any,
+                                }}>
+                                <FontAwesome5 name="heart" size={9} color="#fff" solid />
+                                <Text className="text-[11px] font-bold text-white">
+                                  Donar
+                                </Text>
+                              </Pressable>
                             </View>
                           </View>
                         </View>
@@ -285,23 +337,87 @@ export default function CampanasScreen() {
   }
 
   return (
-    <ScrollView
-      className="flex-1"
-      style={{ backgroundColor: '#fdf8f3' }}
-      contentContainerStyle={{ flexGrow: 1 }}>
-      <PageHeader
-        eyebrow="Solidaridad animal"
-        title="Cada euro cuenta una historia"
-        subtitle="Apoya rescates, tratamientos veterinarios y campañas de bienestar animal lideradas por protectoras verificadas."
-        icon="hand-holding-heart"
-        gradient="sand"
-        stats={[
-          { label: 'campañas', value: campanas.length || '—', icon: 'bullhorn' },
-          { label: 'recaudado', value: '142k€', icon: 'euro-sign' },
-          { label: 'donantes', value: '5.4k', icon: 'users' },
-        ]}
-      />
-      {renderContent()}
-    </ScrollView>
+    <>
+      <ScrollView
+        className="flex-1"
+        style={{ backgroundColor: '#fdf8f3' }}
+        contentContainerStyle={{ flexGrow: 1 }}>
+        <PageHeader
+          eyebrow="Solidaridad animal"
+          title="Cada euro cuenta una historia"
+          subtitle="Apoya rescates, tratamientos veterinarios y campañas de bienestar animal lideradas por protectoras verificadas."
+          icon="hand-holding-heart"
+          gradient="sand"
+          stats={[
+            { label: 'campañas', value: campanas.length || '—', icon: 'bullhorn' },
+            { label: 'recaudado', value: '142k€', icon: 'euro-sign' },
+            { label: 'donantes', value: '5.4k', icon: 'users' },
+          ]}
+        />
+        {renderContent()}
+      </ScrollView>
+
+      <ModalForm
+        open={activeCampana !== null}
+        onClose={closeDonate}
+        title="Apoya esta causa"
+        subtitle={activeCampana?.titulo}
+        icon="hand-holding-heart">
+        <View className="mb-4 rounded-2xl bg-cream-50 px-4 py-3">
+          <Text className="text-[10px] font-bold uppercase tracking-widest text-ink-400">
+            Cantidades sugeridas
+          </Text>
+          <View className="mt-2 flex-row flex-wrap gap-2">
+            {SUGGESTED_AMOUNTS.map((amt) => {
+              const isActive = cantidad === String(amt);
+              return (
+                <Pressable
+                  key={amt}
+                  onPress={() => setCantidad(String(amt))}
+                  className={`rounded-full border-2 px-4 py-2 ${
+                    isActive
+                      ? 'border-transparent bg-brand-500'
+                      : 'border-cream-200 bg-white'
+                  }`}
+                  style={{ cursor: 'pointer' as any }}>
+                  <Text
+                    className={`text-xs font-bold ${
+                      isActive ? 'text-white' : 'text-ink-700'
+                    }`}>
+                    {amt}€
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+
+        <InputWeb
+          label="Cantidad a donar (€)"
+          value={cantidad}
+          onChangeText={setCantidad}
+          placeholder="Ej: 15"
+          numeric
+          required
+          icon="euro-sign"
+          hint="Mínimo 1€"
+        />
+
+        {submitError ? (
+          <View className="mb-3 flex-row items-center gap-2 rounded-2xl bg-rose-50 px-4 py-3">
+            <FontAwesome5 name="exclamation-circle" size={12} color="#e11d48" />
+            <Text className="flex-1 text-xs font-semibold text-rose-700">{submitError}</Text>
+          </View>
+        ) : null}
+
+        <SubmitButton
+          onPress={handleDonate}
+          loading={submitting}
+          loadingText="Procesando..."
+          icon="heart">
+          Donar ahora
+        </SubmitButton>
+      </ModalForm>
+    </>
   );
 }

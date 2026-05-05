@@ -1,8 +1,10 @@
 import { FontAwesome5 } from '@expo/vector-icons';
 import { useEffect, useState } from 'react';
-import { ScrollView, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 
 import { CardCentro, type Centro } from '@/components/CardCentro';
+import { InputWeb, ScoreInput, SubmitButton } from '@/components/InputWeb';
+import { ModalForm } from '@/components/ModalForm';
 import { PageHeader } from '@/components/PageHeader';
 import { StateView } from '@/components/StateView';
 import api from '@/helpers/api';
@@ -14,6 +16,13 @@ export default function CentrosScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [active, setActive] = useState(0);
+
+  const [activeCentro, setActiveCentro] = useState<Centro | null>(null);
+  const [puntuacion, setPuntuacion] = useState(0);
+  const [comentario, setComentario] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetchCentros() {
@@ -28,6 +37,45 @@ export default function CentrosScreen() {
     }
     fetchCentros();
   }, []);
+
+  function openReview(centro: Centro) {
+    setActiveCentro(centro);
+    setPuntuacion(0);
+    setComentario('');
+    setSubmitError(null);
+  }
+
+  function closeReview() {
+    if (submitting) return;
+    setActiveCentro(null);
+  }
+
+  async function handleSubmitReview() {
+    if (!activeCentro) return;
+    if (puntuacion < 1 || puntuacion > 5) {
+      setSubmitError('Selecciona una puntuación entre 1 y 5.');
+      return;
+    }
+    if (!comentario.trim()) {
+      setSubmitError('El comentario es obligatorio.');
+      return;
+    }
+    try {
+      setSubmitting(true);
+      setSubmitError(null);
+      await api.post(`/web/centros/${activeCentro.idCentro}/resenas`, {
+        puntuacion,
+        comentario: comentario.trim(),
+      });
+      setSuccessMessage(`Reseña enviada a ${activeCentro.nombre}. Gracias por contribuir.`);
+      setActiveCentro(null);
+      setTimeout(() => setSuccessMessage(null), 4000);
+    } catch {
+      setSubmitError('No se pudo enviar la reseña. Inténtalo de nuevo en un momento.');
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   function renderContent() {
     if (isLoading) return <StateView variant="loading" message="Buscando centros cercanos…" />;
@@ -44,7 +92,8 @@ export default function CentrosScreen() {
     return (
       <View className="mx-auto w-full max-w-7xl px-6 pb-16">
         {/* Search + filters */}
-        <View className="-mt-10 mb-8 rounded-3xl bg-white p-4 md:flex-row md:items-center md:gap-4"
+        <View
+          className="-mt-10 mb-8 rounded-3xl bg-white p-4 md:flex-row md:items-center md:gap-4"
           style={{ boxShadow: '0 24px 60px -32px rgba(124,45,18,0.28)' as any }}>
           <View className="flex-1 flex-row items-center gap-3 rounded-2xl bg-cream-50 px-4 py-3">
             <FontAwesome5 name="search" size={14} color="#7a6f63" />
@@ -55,8 +104,12 @@ export default function CentrosScreen() {
               style={{ outline: 'none' as any }}
             />
           </View>
-          <View className="mt-3 flex-row items-center gap-2 rounded-2xl bg-brand-500 px-5 py-3 md:mt-0"
-            style={{ boxShadow: '0 12px 30px -12px rgba(249,115,22,0.55)' as any, cursor: 'pointer' as any }}>
+          <View
+            className="mt-3 flex-row items-center gap-2 rounded-2xl bg-brand-500 px-5 py-3 md:mt-0"
+            style={{
+              boxShadow: '0 12px 30px -12px rgba(249,115,22,0.55)' as any,
+              cursor: 'pointer' as any,
+            }}>
             <FontAwesome5 name="sliders-h" size={12} color="#fff" />
             <Text className="text-sm font-bold text-white">Filtros</Text>
           </View>
@@ -69,9 +122,9 @@ export default function CentrosScreen() {
           {CIUDADES.map((ciudad, i) => {
             const isActive = i === active;
             return (
-              <View
+              <Pressable
                 key={ciudad}
-                onPointerDown={() => setActive(i)}
+                onPress={() => setActive(i)}
                 className={`rounded-full border px-5 py-2.5 ${
                   isActive
                     ? 'border-brand-500 bg-brand-500'
@@ -79,9 +132,9 @@ export default function CentrosScreen() {
                 }`}
                 style={{
                   cursor: 'pointer' as any,
-                  ...(isActive && {
-                    boxShadow: '0 10px 24px -10px rgba(249,115,22,0.55)',
-                  } as any),
+                  ...((isActive
+                    ? { boxShadow: '0 10px 24px -10px rgba(249,115,22,0.55)' }
+                    : {}) as any),
                 }}>
                 <Text
                   className={`text-sm font-semibold ${
@@ -89,7 +142,7 @@ export default function CentrosScreen() {
                   }`}>
                   {ciudad}
                 </Text>
-              </View>
+              </Pressable>
             );
           })}
         </ScrollView>
@@ -110,7 +163,7 @@ export default function CentrosScreen() {
             <View
               key={centro.idCentro}
               style={{ flex: 1, minWidth: 280, maxWidth: 380 }}>
-              <CardCentro centro={centro} />
+              <CardCentro centro={centro} onLeaveReview={openReview} />
             </View>
           ))}
         </View>
@@ -119,23 +172,80 @@ export default function CentrosScreen() {
   }
 
   return (
-    <ScrollView
-      className="flex-1"
-      style={{ backgroundColor: '#fdf8f3' }}
-      contentContainerStyle={{ flexGrow: 1 }}>
-      <PageHeader
-        eyebrow="Directorio verificado"
-        title="Centros y veterinarios"
-        subtitle="Clínicas, hospitales y especialistas certificados, listos para cuidar a tu compañero."
-        icon="hospital"
-        gradient="sunrise"
-        stats={[
-          { label: 'centros', value: centros.length || '—', icon: 'clinic-medical' },
-          { label: 'ciudades', value: '24', icon: 'map-marked-alt' },
-          { label: 'valoración', value: '4.8', icon: 'star' },
-        ]}
-      />
-      {renderContent()}
-    </ScrollView>
+    <>
+      <ScrollView
+        className="flex-1"
+        style={{ backgroundColor: '#fdf8f3' }}
+        contentContainerStyle={{ flexGrow: 1 }}>
+        <PageHeader
+          eyebrow="Directorio verificado"
+          title="Centros y veterinarios"
+          subtitle="Clínicas, hospitales y especialistas certificados, listos para cuidar a tu compañero."
+          icon="hospital"
+          gradient="sunrise"
+          stats={[
+            { label: 'centros', value: centros.length || '—', icon: 'clinic-medical' },
+            { label: 'ciudades', value: '24', icon: 'map-marked-alt' },
+            { label: 'valoración', value: '4.8', icon: 'star' },
+          ]}
+        />
+        {renderContent()}
+      </ScrollView>
+
+      {successMessage ? (
+        <View
+          pointerEvents="none"
+          className="absolute bottom-6 left-0 right-0 items-center px-4">
+          <View
+            className="flex-row items-center gap-3 rounded-2xl bg-white px-5 py-4"
+            style={{ boxShadow: '0 24px 60px -20px rgba(34,197,94,0.45)' as any }}>
+            <View className="h-8 w-8 items-center justify-center rounded-xl bg-emerald-100">
+              <FontAwesome5 name="check" size={12} color="#059669" />
+            </View>
+            <Text className="text-sm font-semibold text-ink-700">{successMessage}</Text>
+          </View>
+        </View>
+      ) : null}
+
+      <ModalForm
+        open={activeCentro !== null}
+        onClose={closeReview}
+        title="Dejar reseña"
+        subtitle={activeCentro ? `${activeCentro.nombre} · ${activeCentro.ciudad}` : undefined}
+        icon="pen">
+        <ScoreInput
+          label="Puntuación"
+          value={puntuacion}
+          onChange={setPuntuacion}
+          required
+        />
+        <InputWeb
+          label="Comentario"
+          value={comentario}
+          onChangeText={setComentario}
+          placeholder="Comparte tu experiencia con este centro: trato, instalaciones, profesionalidad…"
+          multiline
+          required
+          icon="comment-alt"
+          maxLength={500}
+          hint={`${comentario.length}/500`}
+        />
+
+        {submitError ? (
+          <View className="mb-3 flex-row items-center gap-2 rounded-2xl bg-rose-50 px-4 py-3">
+            <FontAwesome5 name="exclamation-circle" size={12} color="#e11d48" />
+            <Text className="flex-1 text-xs font-semibold text-rose-700">{submitError}</Text>
+          </View>
+        ) : null}
+
+        <SubmitButton
+          onPress={handleSubmitReview}
+          loading={submitting}
+          loadingText="Publicando..."
+          icon="paper-plane">
+          Publicar reseña
+        </SubmitButton>
+      </ModalForm>
+    </>
   );
 }
